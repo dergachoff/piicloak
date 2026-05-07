@@ -322,6 +322,54 @@ print(result.contains_pii)
 
 ---
 
+## CLI File Redaction
+
+Use the `secrets` profile to redact local agent-memory transcripts, logs, JSONL, JSON, and text
+files without loading the spaCy NLP model.
+
+```bash
+piicloak redact \
+  --profile secrets \
+  --input session.jsonl \
+  --output session.redacted.jsonl
+```
+
+Supported input formats:
+
+- `.jsonl` - processed line by line
+- `.json` - parsed and redacted recursively
+- `.txt` / `.md` / other text files - redacted as plain text
+
+Write redacted content to stdout:
+
+```bash
+piicloak redact --profile secrets --input session.jsonl --output -
+```
+
+When redacted content is written to stdout, the safe JSON summary is written to stderr.
+
+Dry-run mode reports counts by entity type and does not write output:
+
+```bash
+piicloak redact --profile secrets --input session.jsonl --dry-run
+```
+
+Example dry-run response:
+
+```json
+{
+  "ok": true,
+  "profile": "secrets",
+  "dry_run": true,
+  "input": "session.jsonl",
+  "output": null,
+  "redactions": {"API_KEY": 2},
+  "total_redactions": 2
+}
+```
+
+---
+
 ## Best Practices
 
 1. **Use appropriate score_threshold** - Higher values (0.7-1.0) for fewer false positives

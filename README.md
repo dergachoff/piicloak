@@ -232,6 +232,23 @@ curl -X POST http://localhost:8000/anonymize \
 }
 ```
 
+For local transcript files, use the `secrets` profile CLI. This path preserves people,
+organizations, domains, commit SHAs, UUIDs, and other useful recall context while redacting
+technical secrets.
+
+```bash
+piicloak redact \
+  --profile secrets \
+  --input session.jsonl \
+  --output session.redacted.jsonl
+```
+
+Dry-run mode reports safe counts without writing a redacted file:
+
+```bash
+piicloak redact --profile secrets --input session.jsonl --dry-run
+```
+
 ### .docx Files
 
 ```bash

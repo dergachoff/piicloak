@@ -52,7 +52,7 @@ production = [
 ]
 
 [project.scripts]
-piicloak = "piicloak.app:main"
+piicloak = "piicloak.__main__:main"
 
 [project.urls]
 Homepage = "https://github.com/dimanjet/piicloak"
