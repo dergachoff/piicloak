@@ -134,6 +134,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `safe_response` option for `/anonymize`, `/anonymize/docx`, `/analyze`, and the Python SDK to omit raw input and matched entity text from responses.
+- Additional `API_KEY` recognizer coverage for Anthropic, OpenRouter, Google/Gemini, Hugging Face, GitLab, Slack, Discord, Telegram, npm, Vercel, Linear, ClickUp-labeled tokens, Cloudflare-labeled tokens, SendGrid, Sentry DSNs, JWTs, and private-key blocks.
+- Agent memory transcript redaction use case in the README.
+- False-positive regression tests for commit SHAs, session UUIDs, and content hashes.
+
+### Changed
+
+- Tightened AWS secret-key detection to require AWS secret-key context instead of matching arbitrary 40-character strings.
+
 ### Planned Features
 
 - Support for additional languages (Spanish, French, German)

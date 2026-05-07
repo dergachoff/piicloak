@@ -98,12 +98,80 @@ class TestAPIKeyRecognizer:
         text = "Token: ghp_abcdefghijklmnopqrstuvwxyz1234567890"
         results = recognizer.analyze(text, ["API_KEY"])
         assert len(results) >= 1
+
+    def test_git_hosting_tokens(self, recognizer):
+        """Test popular source-control token detection."""
+        samples = [
+            "GitHub Actions token: ghs_abcdefghijklmnopqrstuvwxyz1234567890",
+            "GitLab token: glpat-abcdefghijklmnopqrstuvwx",
+        ]
+        for text in samples:
+            results = recognizer.analyze(text, ["API_KEY"])
+            assert len(results) >= 1, f"Expected API_KEY in: {text}"
     
     def test_aws_key(self, recognizer):
         """Test AWS access key detection."""
         text = "AWS Key: AKIAIOSFODNN7EXAMPLE"
         results = recognizer.analyze(text, ["API_KEY"])
         assert len(results) >= 1
+
+    def test_ai_provider_keys(self, recognizer):
+        """Test AI provider API key detection."""
+        samples = [
+            "OpenRouter: sk-or-v1-abcdefghijklmnopqrstuvwxyz123456",
+            "Anthropic: sk-ant-api03-abcdefghijklmnopqrstuvwxyz123456",
+            "Gemini: AIzaSyBabcdefghijklmnopqrstuvwxyz123456789",
+            "Hugging Face: hf_abcdefghijklmnopqrstuvwxyz1234567890",
+        ]
+        for text in samples:
+            results = recognizer.analyze(text, ["API_KEY"])
+            assert len(results) >= 1, f"Expected API_KEY in: {text}"
+
+    def test_app_and_infrastructure_tokens(self, recognizer):
+        """Test application and infrastructure token detection."""
+        samples = [
+            "Slack token: " + "xox" + "b-123456789012-123456789012-abcdefghijklmnopqrstuvwx",
+            "Discord token: " + "MjM4NzY1NDMyMTA5ODc2NTQ" + ".XyZabc." + "abcdefghijklmnopqrstuvwxyz1",
+            "Telegram token: 1234567890:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi",
+            "npm token: npm_abcdefghijklmnopqrstuvwxyz1234567890",
+            "Vercel token: vercel_abcdefghijklmnopqrstuvwxyz123456",
+            "Linear key: lin_api_abcdefghijklmnopqrstuvwxyz123456",
+            "ClickUp token: pk_abcdefghijklmnopqrstuvwxyz123456",
+            "Cloudflare token=abcdefghijklmnopqrstuvwxyz123456",
+            "SendGrid key: SG.abcdefghijklmnopqrstuvwx.abcdefghijklmnopqrstuvwxyz1234567890",
+            "Sentry DSN: https://0123456789abcdef0123456789abcdef@o123.ingest.sentry.io/456",
+        ]
+        for text in samples:
+            results = recognizer.analyze(text, ["API_KEY"])
+            assert len(results) >= 1, f"Expected API_KEY in: {text}"
+
+    def test_jwt_and_private_key_block(self, recognizer):
+        """Test JWT and private key block detection."""
+        jwt = (
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+            "eyJzdWIiOiIxMjM0NTY3ODkwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSJ9."
+            "SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+        )
+        private_key = (
+            "-----BEGIN PRIVATE KEY-----\n"
+            "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n"
+            "-----END PRIVATE KEY-----"
+        )
+        for text in [f"JWT: {jwt}", private_key]:
+            results = recognizer.analyze(text, ["API_KEY"])
+            assert len(results) >= 1, f"Expected API_KEY in: {text}"
+
+    def test_does_not_match_common_agent_memory_ids(self, recognizer):
+        """Test common agent-memory identifiers are not treated as API keys."""
+        samples = [
+            "Commit 1eeb16dd9f0c2a3b4d5e6f708192a3b4c5d6e7f8 fixed the issue.",
+            "Session 019df702-35e9-7af3-aef3-d3baf62835b6 should stay searchable.",
+            "Content hash sha256:9f86d081884c7d659a2feaa0c55ad015 remains useful.",
+            "Stripe publishable key pk_live_abcdefghijklmnopqrstuvwxyz is not a secret.",
+        ]
+        for text in samples:
+            results = recognizer.analyze(text, ["API_KEY"])
+            assert results == [], f"Unexpected API_KEY in: {text}"
 
 
 class TestSalesforceIDRecognizer:

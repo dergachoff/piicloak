@@ -36,7 +36,8 @@ Anonymize PII in text.
   "entities": ["string"],  // optional, defaults to all
   "mode": "string",        // optional: replace|mask|redact|hash
   "language": "string",    // optional, default: "en"
-  "score_threshold": 0.4   // optional, range: 0-1
+  "score_threshold": 0.4,  // optional, range: 0-1
+  "safe_response": false   // optional, omit raw input and matches
 }
 ```
 
@@ -57,6 +58,9 @@ Anonymize PII in text.
   ]
 }
 ```
+
+When `safe_response` is `true`, PIICloak omits `original` and omits the raw `text` field from each
+entity result. This is useful when responses may be logged or stored by downstream systems.
 
 **Example:**
 
@@ -116,7 +120,8 @@ Detect PII without anonymizing.
   "text": "string (required)",
   "entities": ["string"],  // optional
   "language": "string",    // optional
-  "score_threshold": 0.4   // optional
+  "score_threshold": 0.4,  // optional
+  "safe_response": false   // optional, omit raw input and matches
 }
 ```
 
@@ -129,6 +134,9 @@ Detect PII without anonymizing.
   "entities_found": [...]
 }
 ```
+
+When `safe_response` is `true`, PIICloak omits the response-level `text` field and raw entity
+matches.
 
 ---
 
@@ -227,7 +235,7 @@ Health check endpoint.
 
 - `IP_ADDRESS` - IP addresses
 - `URL` - URLs
-- `API_KEY` - API keys (OpenAI, AWS, GitHub, Stripe)
+- `API_KEY` - API keys and secrets (OpenAI, Anthropic, OpenRouter, GitHub, GitLab, Hugging Face, Stripe, Slack, Telegram, ClickUp-labeled tokens, Sentry, JWT, generic)
 
 ### Other
 
@@ -296,6 +304,15 @@ result = cloak.anonymize(
     mode="replace"
 )
 print(result.anonymized)
+print(result.entities_found)
+
+# Safe response mode omits raw input and matched entity text from the result
+result = cloak.anonymize(
+    "OpenRouter key sk-or-v1-abcdefghijklmnopqrstuvwxyz123456",
+    entities=["API_KEY"],
+    safe_response=True
+)
+print(result.original)  # None
 print(result.entities_found)
 
 # Analyze only

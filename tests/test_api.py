@@ -1,7 +1,27 @@
 """Tests for the REST API endpoints."""
 
-import pytest
 import json
+from types import SimpleNamespace
+
+from piicloak.api import format_entities_found, parse_bool
+from piicloak.api import create_app
+
+
+class FakeAnalyzer:
+    """Minimal analyzer stub for endpoint tests."""
+
+    def analyze(self, text, entities, language, score_threshold):
+        return [SimpleNamespace(entity_type="API_KEY", start=15, end=len(text), score=0.95)]
+
+
+class FakeAnonymizer:
+    """Minimal anonymizer stub for endpoint tests."""
+
+    def __init__(self, text):
+        self.text = text
+
+    def anonymize(self, text, analyzer_results, operators):
+        return SimpleNamespace(text=self.text)
 
 
 class TestHealthEndpoint:
@@ -166,6 +186,89 @@ class TestAnonymizeEndpoint:
         data = json.loads(response.data)
         # High threshold should still catch high-confidence matches
         assert '<EMAIL_ADDRESS>' in data['anonymized']
+
+
+class TestSafeResponseHelpers:
+    """Test response helpers for raw-text suppression."""
+
+    def test_parse_bool(self):
+        """Test common boolean inputs."""
+        assert parse_bool(True) is True
+        assert parse_bool("true") is True
+        assert parse_bool("1") is True
+        assert parse_bool(False) is False
+        assert parse_bool("false") is False
+
+    def test_format_entities_found_omits_text_when_safe(self):
+        """Test safe responses omit raw matched entity text."""
+        text = "OpenAI key: sk-1234567890abcdefghijklmnopqrstuv"
+        result = SimpleNamespace(entity_type="API_KEY", start=12, end=len(text), score=0.95)
+
+        entities = format_entities_found(text, [result], include_text=False)
+
+        assert entities == [
+            {
+                "type": "API_KEY",
+                "start": 12,
+                "end": len(text),
+                "score": 0.95,
+            }
+        ]
+
+    def test_format_entities_found_includes_text_by_default(self):
+        """Test normal responses preserve existing raw match behavior."""
+        text = "Email john@example.com"
+        result = SimpleNamespace(entity_type="EMAIL_ADDRESS", start=6, end=len(text), score=1.0)
+
+        entities = format_entities_found(text, [result])
+
+        assert entities[0]["text"] == "john@example.com"
+
+
+class TestSafeResponseEndpoints:
+    """Test safe-response behavior at the endpoint boundary."""
+
+    def test_anonymize_safe_response_omits_raw_input_and_matches(self):
+        """Test /anonymize safe_response does not echo raw secret material."""
+        app = create_app(FakeAnalyzer(), FakeAnonymizer("<API_KEY>"))
+        app.config['TESTING'] = True
+
+        response = app.test_client().post(
+            '/anonymize',
+            json={
+                "text": "OpenRouter key sk-or-v1-abcdefghijklmnopqrstuvwxyz123456",
+                "entities": ["API_KEY"],
+                "safe_response": True,
+            },
+        )
+
+        data = json.loads(response.data)
+        assert response.status_code == 200
+        assert data["anonymized"] == "<API_KEY>"
+        assert data["safe_response"] is True
+        assert "original" not in data
+        assert "text" not in data["entities_found"][0]
+
+    def test_analyze_safe_response_omits_raw_input_and_matches(self):
+        """Test /analyze safe_response does not echo raw secret material."""
+        app = create_app(FakeAnalyzer(), FakeAnonymizer("<API_KEY>"))
+        app.config['TESTING'] = True
+
+        response = app.test_client().post(
+            '/analyze',
+            json={
+                "text": "OpenRouter key sk-or-v1-abcdefghijklmnopqrstuvwxyz123456",
+                "entities": ["API_KEY"],
+                "safe_response": True,
+            },
+        )
+
+        data = json.loads(response.data)
+        assert response.status_code == 200
+        assert data["contains_pii"] is True
+        assert data["safe_response"] is True
+        assert "text" not in data
+        assert "text" not in data["entities_found"][0]
 
 
 class TestAnalyzeEndpoint:

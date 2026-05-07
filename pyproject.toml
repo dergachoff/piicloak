@@ -59,7 +59,7 @@ Homepage = "https://github.com/dimanjet/piicloak"
 Documentation = "https://github.com/dimanjet/piicloak#readme"
 Repository = "https://github.com/dimanjet/piicloak"
 Issues = "https://github.com/dimanjet/piicloak/issues"
-Changelog = "https://github.com/dimanjet/piicloak/blob/main/CHANGELOG.md"
+Changelog = "https://github.com/dimanjet/piicloak/blob/main/docs/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 where = ["src"]

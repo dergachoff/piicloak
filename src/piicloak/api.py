@@ -13,6 +13,31 @@ from .middleware import setup_middleware
 from .metrics import setup_metrics, metrics, track_entities
 
 
+def parse_bool(value) -> bool:
+    """Parse common JSON/form boolean values."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.lower() in {"1", "true", "yes", "on"}
+    return False
+
+
+def format_entities_found(text: str, results, include_text: bool = True) -> list:
+    """Format recognizer results, optionally omitting raw matched text."""
+    entities_found = []
+    for result in results:
+        entity = {
+            "type": result.entity_type,
+            "start": result.start,
+            "end": result.end,
+            "score": round(result.score, 3)
+        }
+        if include_text:
+            entity["text"] = text[result.start:result.end]
+        entities_found.append(entity)
+    return entities_found
+
+
 def create_app(analyzer, anonymizer) -> Flask:
     """
     Create and configure the Flask application.
@@ -102,6 +127,7 @@ def create_app(analyzer, anonymizer) -> Flask:
         entities = data.get('entities', SUPPORTED_ENTITIES)
         mode = data.get('mode', DEFAULT_MODE)
         score_threshold = data.get('score_threshold', DEFAULT_SCORE_THRESHOLD)
+        safe_response = parse_bool(data.get('safe_response', False))
         
         if mode not in ANONYMIZATION_MODES:
             return jsonify({
@@ -123,26 +149,22 @@ def create_app(analyzer, anonymizer) -> Flask:
             operators=get_operators(mode)
         )
         
-        entities_found = [
-            {
-                "type": r.entity_type,
-                "text": text[r.start:r.end],
-                "start": r.start,
-                "end": r.end,
-                "score": round(r.score, 3)
-            }
-            for r in results
-        ]
+        entities_found = format_entities_found(text, results, include_text=not safe_response)
         
         # Track metrics
         if ENABLE_METRICS:
             track_entities(len(results))
         
-        return jsonify({
-            "original": text,
+        response = {
             "anonymized": anonymized_result.text,
             "entities_found": entities_found
-        })
+        }
+        if safe_response:
+            response["safe_response"] = True
+        else:
+            response["original"] = text
+
+        return jsonify(response)
 
     @app.route('/anonymize/docx', methods=['POST'])
     def anonymize_docx():
@@ -176,6 +198,7 @@ def create_app(analyzer, anonymizer) -> Flask:
         entities = entities_param.split(',') if entities_param else SUPPORTED_ENTITIES
         mode = request.form.get('mode', DEFAULT_MODE)
         score_threshold = float(request.form.get('score_threshold', DEFAULT_SCORE_THRESHOLD))
+        safe_response = parse_bool(request.form.get('safe_response', False))
         
         results = analyzer.analyze(
             text=text,
@@ -190,21 +213,16 @@ def create_app(analyzer, anonymizer) -> Flask:
             operators=get_operators(mode)
         )
         
-        entities_found = [
-            {
-                "type": r.entity_type,
-                "text": text[r.start:r.end],
-                "start": r.start,
-                "end": r.end,
-                "score": round(r.score, 3)
-            }
-            for r in results
-        ]
+        entities_found = format_entities_found(text, results, include_text=not safe_response)
         
-        return jsonify({
+        response = {
             "anonymized_text": anonymized_result.text,
             "entities_found": entities_found
-        })
+        }
+        if safe_response:
+            response["safe_response"] = True
+
+        return jsonify(response)
 
     @app.route('/analyze', methods=['POST'])
     def analyze_only():
@@ -228,6 +246,7 @@ def create_app(analyzer, anonymizer) -> Flask:
         language = data.get('language', 'en')
         entities = data.get('entities', SUPPORTED_ENTITIES)
         score_threshold = data.get('score_threshold', DEFAULT_SCORE_THRESHOLD)
+        safe_response = parse_bool(data.get('safe_response', False))
         
         results = analyzer.analyze(
             text=text,
@@ -236,20 +255,16 @@ def create_app(analyzer, anonymizer) -> Flask:
             score_threshold=score_threshold
         )
         
-        return jsonify({
-            "text": text,
+        response = {
             "contains_pii": len(results) > 0,
-            "entities_found": [
-                {
-                    "type": r.entity_type,
-                    "text": text[r.start:r.end],
-                    "start": r.start,
-                    "end": r.end,
-                    "score": round(r.score, 3)
-                }
-                for r in results
-            ]
-        })
+            "entities_found": format_entities_found(text, results, include_text=not safe_response)
+        }
+        if safe_response:
+            response["safe_response"] = True
+        else:
+            response["text"] = text
+
+        return jsonify(response)
 
     @app.route('/entities', methods=['GET'])
     def list_entities():

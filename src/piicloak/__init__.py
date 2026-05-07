@@ -43,7 +43,7 @@ class PIICloak:
         self.anonymizer = create_anonymizer()
         self.score_threshold = score_threshold
     
-    def anonymize(self, text, mode="replace", entities=None):
+    def anonymize(self, text, mode="replace", entities=None, safe_response=False):
         """
         Anonymize PII in text.
         
@@ -51,6 +51,7 @@ class PIICloak:
             text: Text to anonymize
             mode: Anonymization mode (replace, mask, redact, hash)
             entities: List of entity types to detect (None = all)
+            safe_response: Omit raw input and matched entity text from the result
             
         Returns:
             Result object with .anonymized and .entities_found attributes
@@ -90,26 +91,28 @@ class PIICloak:
                 self.anonymized = anonymized
                 self.entities_found = entities
         
-        entities_found = [
-            {
-                "type": r.entity_type,
-                "text": text[r.start:r.end],
-                "start": r.start,
-                "end": r.end,
-                "score": round(r.score, 3)
+        entities_found = []
+        for result in results:
+            entity = {
+                "type": result.entity_type,
+                "start": result.start,
+                "end": result.end,
+                "score": round(result.score, 3)
             }
-            for r in results
-        ]
+            if not safe_response:
+                entity["text"] = text[result.start:result.end]
+            entities_found.append(entity)
         
-        return Result(text, anonymized_result.text, entities_found)
+        return Result(None if safe_response else text, anonymized_result.text, entities_found)
     
-    def analyze(self, text, entities=None):
+    def analyze(self, text, entities=None, safe_response=False):
         """
         Detect PII without anonymizing.
         
         Args:
             text: Text to analyze
             entities: List of entity types to detect (None = all)
+            safe_response: Omit raw input and matched entity text from the result
             
         Returns:
             Result object with .contains_pii and .entities_found attributes
@@ -131,15 +134,16 @@ class PIICloak:
                 self.contains_pii = contains_pii
                 self.entities_found = entities
         
-        entities_found = [
-            {
-                "type": r.entity_type,
-                "text": text[r.start:r.end],
-                "start": r.start,
-                "end": r.end,
-                "score": round(r.score, 3)
+        entities_found = []
+        for result in results:
+            entity = {
+                "type": result.entity_type,
+                "start": result.start,
+                "end": result.end,
+                "score": round(result.score, 3)
             }
-            for r in results
-        ]
+            if not safe_response:
+                entity["text"] = text[result.start:result.end]
+            entities_found.append(entity)
         
-        return Result(text, len(results) > 0, entities_found)
+        return Result(None if safe_response else text, len(results) > 0, entities_found)
