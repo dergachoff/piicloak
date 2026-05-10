@@ -1,32 +1,186 @@
-name: Publish to PyPI
+name: Release
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to release, for example v1.1.0"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 
 jobs:
-  deploy:
+  validate:
+    name: Validate release tag
     runs-on: ubuntu-latest
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+      with:
+        ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+    - name: Validate tag and package versions
+      run: |
+        set -euo pipefail
+
+        if [[ ! "${RELEASE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([a-zA-Z0-9.-]+)?$ ]]; then
+          echo "Release tag must look like v1.2.3 or v1.2.3rc1: ${RELEASE_TAG}" >&2
+          exit 1
+        fi
+
+        python - <<'PY'
+        from __future__ import annotations
+
+        import os
+        import pathlib
+        import re
+        import tomllib
+
+        root = pathlib.Path.cwd()
+        tag = os.environ["RELEASE_TAG"]
+        expected = tag.removeprefix("v")
+
+        versions = {
+            "pyproject.toml": tomllib.loads((root / "pyproject.toml").read_text())["project"]["version"],
+            "src/piicloak/__init__.py": re.search(
+                r'__version__ = "([^"]+)"',
+                (root / "src/piicloak/__init__.py").read_text(),
+            ).group(1),
+        }
+
+        mismatches = {
+            path: version
+            for path, version in versions.items()
+            if version != expected
+        }
+
+        if mismatches:
+            for path, version in mismatches.items():
+                print(f"{path} has {version}, expected {expected}")
+            raise SystemExit(1)
+
+        print(f"Release tag {tag} matches package version {expected}")
+        PY
+
+  test:
+    name: Test release
+    runs-on: ubuntu-latest
+    needs: validate
+    timeout-minutes: 20
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
-    
+        python-version: "3.11"
+        cache: "pip"
+
     - name: Install dependencies
+      timeout-minutes: 12
+      run: |
+        python -m pip install --upgrade pip wheel setuptools
+        pip install --only-binary :all: spacy || pip install spacy
+        pip install -e ".[dev]"
+
+    - name: Download spaCy model
+      timeout-minutes: 6
+      run: python -m spacy download en_core_web_lg
+
+    - name: Lint with flake8
+      run: |
+        flake8 src/ tests/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 src/ tests/ --count --max-complexity=10 --max-line-length=100 --statistics
+
+    - name: Format check with black
+      run: black --check src/ tests/
+
+    - name: Run tests with pytest
+      timeout-minutes: 5
+      run: pytest --cov=piicloak --cov-report=term-missing -v
+
+  build:
+    name: Build distributions
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Build and check distributions
       run: |
         python -m pip install --upgrade pip
-        pip install build twine
-    
-    - name: Build package
-      run: python -m build
-    
-    - name: Publish to PyPI
-      env:
-        TWINE_USERNAME: __token__
-        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        python -m pip install build twine
+        python -m build
+        python -m twine check dist/*
+
+    - name: Upload distributions
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-dists
+        path: dist/
+        if-no-files-found: error
+
+  github-release:
+    name: Create GitHub release
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: write
+
+    steps:
+    - name: Download distributions
+      uses: actions/download-artifact@v4
+      with:
+        name: release-dists
+        path: dist/
+
+    - name: Publish GitHub release
       run: |
-        twine upload dist/*
+        set -euo pipefail
+        gh release create "${RELEASE_TAG}" dist/* \
+          --repo "${GITHUB_REPOSITORY}" \
+          --title "${RELEASE_TAG}" \
+          --verify-tag \
+          --generate-notes
+      env:
+        GH_TOKEN: ${{ github.token }}
+
+  pypi:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    needs: github-release
+    permissions:
+      id-token: write
+
+    environment:
+      name: pypi
+      url: https://pypi.org/project/piicloak/
+
+    steps:
+    - name: Download distributions
+      uses: actions/download-artifact@v4
+      with:
+        name: release-dists
+        path: dist/
+
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1

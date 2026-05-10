@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=77.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,7 @@ name = "piicloak"
 version = "1.1.0"
 description = "Enterprise-grade PII detection and anonymization API. Helps achieve GDPR/CCPA compliance. Supports 31 entity types."
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
 requires-python = ">=3.9"
 keywords = ["pii", "pii-detection", "anonymization", "gdpr", "ccpa", "hipaa", "privacy", "data-protection", "presidio", "spacy", "nlp", "ner", "salesforce", "legal-tech", "fintech", "healthcare", "text-processing", "redaction", "compliance"]
 authors = [
@@ -20,7 +20,7 @@ classifiers = [
     "Intended Audience :: Legal Industry",
     "Intended Audience :: Healthcare Industry",
     "Intended Audience :: Financial and Insurance Industry",
-    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
@@ -28,6 +28,8 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Security",
     "Topic :: Text Processing",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Office/Business",
     "Environment :: Web Environment",
     "Framework :: Flask",
 ]

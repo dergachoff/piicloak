@@ -139,24 +139,38 @@ curl http://localhost:5050/health
 
 ## 🤖 Automated Publishing (GitHub Actions)
 
-Your `.github/workflows/publish.yml` already handles this!
+`.github/workflows/publish.yml` runs the release flow when a version tag is pushed.
 
-**For PyPI:**
-1. Go to repo Settings → Secrets → Actions
-2. Add secret: `PYPI_API_TOKEN` with your PyPI token
-3. Create a GitHub release or push a tag:
-   ```bash
-   git tag v1.0.0
-   git push origin v1.0.0
-   ```
-4. GitHub Actions will automatically publish to PyPI
+### PyPI setup
 
-**For Docker Hub:**
-1. Add secrets:
-   - `DOCKER_USERNAME`: Your Docker Hub username
-   - `DOCKER_PASSWORD`: Your Docker Hub password/token
-2. Push a tag (as above)
-3. GitHub Actions will automatically publish to Docker Hub
+Use PyPI Trusted Publishing instead of a long-lived API token:
+
+1. Go to the PyPI project publishing settings.
+2. Add a trusted publisher for this GitHub repository.
+3. Use workflow name `publish.yml` and environment name `pypi`.
+4. In GitHub, create the `pypi` environment under Settings → Environments.
+
+No `PYPI_API_TOKEN` repository secret is required for this workflow.
+
+### Release a version
+
+```bash
+# Update version in pyproject.toml and src/piicloak/__init__.py first.
+git tag -a v1.1.0 -m "v1.1.0"
+git push origin v1.1.0
+```
+
+The workflow will:
+
+1. Verify the tag matches the package version.
+2. Run lint, format, and tests.
+3. Build and check the wheel/sdist.
+4. Create the GitHub release with generated notes and distribution assets.
+5. Publish the same distributions to PyPI.
+
+If a tag already exists without a GitHub release, run the `Release` workflow manually from GitHub Actions and provide the existing tag name.
+
+Docker images are still published manually with the Docker commands above.
 
 ---
 
@@ -165,7 +179,7 @@ Your `.github/workflows/publish.yml` already handles this!
 Before publishing v1.0.0:
 
 - [ ] All tests passing (`make test`)
-- [ ] Version updated in `setup.py`, `pyproject.toml`, `src/piicloak/__init__.py`
+- [ ] Version updated in `pyproject.toml` and `src/piicloak/__init__.py`
 - [ ] CHANGELOG.md updated
 - [ ] README.md reviewed
 - [ ] GitHub repo created and code pushed
@@ -183,7 +197,6 @@ For future releases:
 
 ```bash
 # Update version in these files:
-# - setup.py (version="1.0.1")
 # - pyproject.toml (version = "1.0.1")
 # - src/piicloak/__init__.py (__version__ = "1.0.1")
 
@@ -193,7 +206,7 @@ git commit -m "Bump version to 1.0.1"
 git tag v1.0.1
 git push origin main --tags
 
-# GitHub Actions will handle the rest!
+# GitHub Actions will create the GitHub release and publish to PyPI.
 ```
 
 ---
