@@ -28,6 +28,11 @@ def token(*parts):
     return "".join(parts)
 
 
+def load_stderr_json(stderr):
+    """Load the CLI JSON summary from stderr, ignoring earlier warnings."""
+    return json.loads(stderr.strip().splitlines()[-1])
+
+
 def test_redact_jsonl_file_preserves_agent_memory_context(tmp_path):
     """Test JSONL transcript redaction preserves useful non-secret identifiers."""
     source = tmp_path / "session.jsonl"
@@ -107,7 +112,7 @@ def test_redact_json_and_plain_text(tmp_path):
     assert "sk-ant-" not in json_output.read_text(encoding="utf-8")
     assert "<API_KEY>" in json_output.read_text(encoding="utf-8")
 
-    text_summary = json.loads(text_result.stderr)
+    text_summary = load_stderr_json(text_result.stderr)
     assert text_summary["total_redactions"] == 1
     assert "1234567890:" not in text_result.stdout
     assert "<API_KEY>" in text_result.stdout

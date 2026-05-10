@@ -5,6 +5,8 @@ The secrets profile intentionally uses pattern recognizers only so agent-memory
 transcript redaction can run without loading a spaCy model.
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import sys
