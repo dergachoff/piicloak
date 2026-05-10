@@ -37,7 +37,7 @@ PIICloak is a production-ready REST API service for **detecting and anonymizing 
 | **Organization Detection** | ✅ NER-based (works with ANY company name) | ❌ Pattern-only |
 | **Salesforce Support** | ✅ Native (Account/Contact/Case/Lead IDs) | ❌ Not included |
 | **Legal Document Support** | ✅ Case numbers, contracts, dockets | ❌ Not included |
-| **API Keys Detection** | ✅ OpenAI, AWS, GitHub, Stripe, generic | ⚠️ Limited |
+| **API Keys Detection** | ✅ OpenAI, Anthropic, OpenRouter, GitHub, GitLab, Stripe, Slack, Telegram, Sentry, generic | ⚠️ Limited |
 | **SDK** | ✅ Python SDK included | ❌ API only |
 | **One-Line Install** | ✅ `pip install piicloak` | ⚠️ Complex setup |
 | **Docker Ready** | ✅ Production-grade image | ⚠️ Basic |
@@ -128,7 +128,7 @@ print(result.anonymized)  # "Contact <PERSON> at <EMAIL_ADDRESS>"
 | `CONTRACT_NUMBER` | Contract and agreement numbers | "CONT-2024-001", "AGR-123456" |
 | **💻 TECHNICAL & SECURITY** |||
 | `USERNAME` | Usernames and login IDs | "john_smith123", "@johndoe", "admin" |
-| `API_KEY` | API keys (OpenAI, AWS, GitHub, Stripe, generic) | "sk-1234567890abcdef...", "ghp_abc..." |
+| `API_KEY` | API keys and secrets (OpenAI, Anthropic, OpenRouter, GitHub, GitLab, Hugging Face, Stripe, Slack, Telegram, ClickUp-labeled tokens, Sentry, JWT, generic) | "sk-1234567890abcdef...", "ghp_abc..." |
 | `IP_ADDRESS` | IPv4 and IPv6 addresses | "192.168.1.1", "2001:0db8::1" |
 | `URL` | Web URLs | "https://example.com/page" |
 | **🏥 HEALTHCARE & OTHER** |||
@@ -203,6 +203,50 @@ curl -X POST http://localhost:8000/anonymize \
 **Output:**
 ```
 OpenAI key: <API_KEY>, GitHub: <API_KEY>
+```
+
+### Agent Memory Transcript Redaction
+
+Agent memory and coding-assistant tools often index chat transcripts for later recall. Use `API_KEY`
+detection with `safe_response` to redact secret-shaped values without echoing raw matches in the API
+response.
+
+```bash
+curl -X POST http://localhost:8000/anonymize \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Save commit 1eeb16dd but redact OpenRouter sk-or-v1-abcdefghijklmnopqrstuvwxyz123456",
+    "entities": ["API_KEY"],
+    "safe_response": true
+  }'
+```
+
+**Output:**
+```json
+{
+  "anonymized": "Save commit 1eeb16dd but redact OpenRouter <API_KEY>",
+  "entities_found": [
+    {"type": "API_KEY", "start": 43, "end": 84, "score": 0.95}
+  ],
+  "safe_response": true
+}
+```
+
+For local transcript files, use the `secrets` profile CLI. This path preserves people,
+organizations, domains, commit SHAs, UUIDs, and other useful recall context while redacting
+technical secrets.
+
+```bash
+piicloak redact \
+  --profile secrets \
+  --input session.jsonl \
+  --output session.redacted.jsonl
+```
+
+Dry-run mode reports safe counts without writing a redacted file:
+
+```bash
+piicloak redact --profile secrets --input session.jsonl --dry-run
 ```
 
 ### .docx Files
@@ -283,6 +327,8 @@ python -m piicloak
   "entities_found": [...]
 }
 ```
+
+Set `"safe_response": true` to omit the raw input and raw matched entity text from the response.
 
 #### POST `/analyze` - Detect PII Only
 

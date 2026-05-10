@@ -13,7 +13,7 @@ requirements_path = Path(__file__).parent / "requirements.txt"
 requirements = []
 if requirements_path.exists():
     requirements = [
-        line.strip() 
+        line.strip()
         for line in requirements_path.read_text().splitlines()
         if line.strip() and not line.startswith("#") and not line.startswith("-")
     ]
@@ -54,8 +54,8 @@ setup(
         "Framework :: Flask",
     ],
     keywords="pii pii-detection anonymization gdpr ccpa hipaa privacy data-protection "
-             "presidio spacy nlp ner salesforce legal-tech fintech healthcare "
-             "text-processing redaction compliance",
+    "presidio spacy nlp ner salesforce legal-tech fintech healthcare "
+    "text-processing redaction compliance",
     package_dir={"": "src"},
     packages=find_packages(where="src"),
     python_requires=">=3.9",
@@ -80,7 +80,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "piicloak=piicloak.app:main",
+            "piicloak=piicloak.__main__:main",
         ],
     },
 )

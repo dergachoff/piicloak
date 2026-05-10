@@ -36,7 +36,8 @@ Anonymize PII in text.
   "entities": ["string"],  // optional, defaults to all
   "mode": "string",        // optional: replace|mask|redact|hash
   "language": "string",    // optional, default: "en"
-  "score_threshold": 0.4   // optional, range: 0-1
+  "score_threshold": 0.4,  // optional, range: 0-1
+  "safe_response": false   // optional, omit raw input and matches
 }
 ```
 
@@ -57,6 +58,9 @@ Anonymize PII in text.
   ]
 }
 ```
+
+When `safe_response` is `true`, PIICloak omits `original` and omits the raw `text` field from each
+entity result. This is useful when responses may be logged or stored by downstream systems.
 
 **Example:**
 
@@ -84,6 +88,7 @@ Anonymize PII in .docx documents.
   - `mode`: replace|mask|redact|hash (optional)
   - `language`: Language code (optional)
   - `score_threshold`: Float 0-1 (optional)
+  - `safe_response`: Boolean; omit raw input and raw matched entity text (optional)
 
 **Response:**
 
@@ -116,7 +121,8 @@ Detect PII without anonymizing.
   "text": "string (required)",
   "entities": ["string"],  // optional
   "language": "string",    // optional
-  "score_threshold": 0.4   // optional
+  "score_threshold": 0.4,  // optional
+  "safe_response": false   // optional, omit raw input and matches
 }
 ```
 
@@ -129,6 +135,9 @@ Detect PII without anonymizing.
   "entities_found": [...]
 }
 ```
+
+When `safe_response` is `true`, PIICloak omits the response-level `text` field and raw entity
+matches.
 
 ---
 
@@ -227,7 +236,7 @@ Health check endpoint.
 
 - `IP_ADDRESS` - IP addresses
 - `URL` - URLs
-- `API_KEY` - API keys (OpenAI, AWS, GitHub, Stripe)
+- `API_KEY` - API keys and secrets (OpenAI, Anthropic, OpenRouter, GitHub, GitLab, Hugging Face, Stripe, Slack, Telegram, ClickUp-labeled tokens, Sentry, JWT, generic)
 
 ### Other
 
@@ -298,9 +307,66 @@ result = cloak.anonymize(
 print(result.anonymized)
 print(result.entities_found)
 
+# Safe response mode omits raw input and matched entity text from the result
+result = cloak.anonymize(
+    "OpenRouter key sk-or-v1-abcdefghijklmnopqrstuvwxyz123456",
+    entities=["API_KEY"],
+    safe_response=True
+)
+print(result.original)  # None
+print(result.entities_found)
+
 # Analyze only
 result = cloak.analyze("Text to analyze")
 print(result.contains_pii)
+```
+
+---
+
+## CLI File Redaction
+
+Use the `secrets` profile to redact local agent-memory transcripts, logs, JSONL, JSON, and text
+files without loading the spaCy NLP model.
+
+```bash
+piicloak redact \
+  --profile secrets \
+  --input session.jsonl \
+  --output session.redacted.jsonl
+```
+
+Supported input formats:
+
+- `.jsonl` - processed line by line
+- `.json` - parsed and redacted recursively
+- `.txt` / `.md` / other text files - redacted as plain text
+
+Write redacted content to stdout:
+
+```bash
+piicloak redact --profile secrets --input session.jsonl --output -
+```
+
+When redacted content is written to stdout, the safe JSON summary is written to stderr.
+
+Dry-run mode reports counts by entity type and does not write output:
+
+```bash
+piicloak redact --profile secrets --input session.jsonl --dry-run
+```
+
+Example dry-run response:
+
+```json
+{
+  "ok": true,
+  "profile": "secrets",
+  "dry_run": true,
+  "input": "session.jsonl",
+  "output": null,
+  "redactions": {"API_KEY": 2},
+  "total_redactions": 2
+}
 ```
 
 ---

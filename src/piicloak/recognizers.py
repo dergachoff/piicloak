@@ -144,18 +144,38 @@ def create_api_key_recognizer() -> PatternRecognizer:
     """Create API key recognizer for common platforms."""
     patterns = [
         # OpenAI keys: sk-proj-XXX or sk-XXX (old format)
-        Pattern("OPENAI_KEY_NEW", r"\bsk-proj-[a-zA-Z0-9]{32,}\b", 0.95),
-        Pattern("OPENAI_KEY", r"\bsk-[a-zA-Z0-9]{32,}\b", 0.95),
+        Pattern("OPENAI_KEY_NEW", r"\bsk-proj-[a-zA-Z0-9_-]{32,}\b", 0.95),
+        Pattern("OPENAI_KEY", r"\bsk-[a-zA-Z0-9_-]{32,}\b", 0.95),
         # AWS keys
         Pattern("AWS_ACCESS_KEY", r"\bAKIA[0-9A-Z]{16}\b", 0.95),
-        Pattern("AWS_SECRET_KEY", r"\b[a-zA-Z0-9/+=]{40}\b", 0.7),  # Lower score, can be generic
+        Pattern("AWS_SECRET_KEY", r"(?i)(?:aws[_-]?secret(?:[_-]?access)?[_-]?key)\s*[=:]\s*['\"]?[a-zA-Z0-9/+=]{40}['\"]?", 0.9),
         # GitHub tokens (flexible length)
         Pattern("GITHUB_TOKEN", r"\bghp_[a-zA-Z0-9]{30,100}\b", 0.95),
         Pattern("GITHUB_TOKEN_OLD", r"\bgho_[a-zA-Z0-9]{30,100}\b", 0.95),
+        Pattern("GITHUB_APP_TOKEN", r"\bgh[usr]_[a-zA-Z0-9]{30,100}\b", 0.95),
         Pattern("GITHUB_FINE_GRAINED", r"\bgithub_pat_[a-zA-Z0-9_]{70,100}\b", 0.95),
+        Pattern("GITLAB_TOKEN", r"\bglpat-[a-zA-Z0-9_-]{20,}\b", 0.95),
+        # AI provider keys
+        Pattern("OPENROUTER_KEY", r"\bsk-or-v1-[a-zA-Z0-9_-]{20,}\b", 0.95),
+        Pattern("ANTHROPIC_KEY", r"\bsk-ant-[a-zA-Z0-9_-]{20,}\b", 0.95),
+        Pattern("GOOGLE_API_KEY", r"\bAIza[0-9A-Za-z_-]{30,45}\b", 0.95),
+        Pattern("HUGGINGFACE_TOKEN", r"\bhf_[a-zA-Z0-9]{30,}\b", 0.95),
         # Stripe keys
         Pattern("STRIPE_KEY", r"\bsk_live_[a-zA-Z0-9]{24,}\b", 0.95),
         Pattern("STRIPE_TEST", r"\bsk_test_[a-zA-Z0-9]{24,}\b", 0.95),
+        # App and infrastructure tokens
+        Pattern("SLACK_TOKEN", r"\bxox[baprs]-[0-9A-Za-z-]{20,}\b", 0.95),
+        Pattern("DISCORD_TOKEN", r"\b[MN][A-Za-z\d_-]{22,27}\.[\w-]{6}\.[\w-]{27,}\b", 0.95),
+        Pattern("TELEGRAM_BOT_TOKEN", r"\b\d{8,12}:[A-Za-z0-9_-]{35}\b", 0.95),
+        Pattern("NPM_TOKEN", r"\bnpm_[a-zA-Z0-9]{36}\b", 0.95),
+        Pattern("VERCEL_TOKEN", r"\bvercel_[a-zA-Z0-9]{24,}\b", 0.95),
+        Pattern("LINEAR_API_KEY", r"\blin_api_[a-zA-Z0-9]{20,}\b", 0.95),
+        Pattern("CLICKUP_TOKEN_LABELED", r"(?i)(?:clickup|click_up)(?:[\s_-]+api)?[\s_-]+(?:key|token)\s*[=:]\s*['\"]?pk_[a-zA-Z0-9_-]{20,}['\"]?", 0.95),
+        Pattern("CLOUDFLARE_TOKEN_LABELED", r"(?i)(?:cloudflare|cf)(?:[\s_-]+api)?[\s_-]+token\s*[=:]\s*['\"]?[a-zA-Z0-9_-]{20,}['\"]?", 0.9),
+        Pattern("SENDGRID_API_KEY", r"\bSG\.[a-zA-Z0-9_-]{16,}\.[a-zA-Z0-9_-]{16,}\b", 0.95),
+        Pattern("SENTRY_DSN", r"\bhttps://[a-f0-9]{32}@[a-z0-9.-]+/\d+\b", 0.95),
+        Pattern("JWT", r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b", 0.9),
+        Pattern("PRIVATE_KEY_BLOCK", r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]+?-----END [A-Z ]*PRIVATE KEY-----", 0.95),
         # Generic patterns
         Pattern("BEARER_TOKEN", r"(?i)bearer\s+[a-zA-Z0-9_\-\.]{20,}", 0.85),
         Pattern("SECRET_GENERIC", r"(?i)(?:api[_-]?key|secret[_-]?key|access[_-]?token|auth[_-]?token)\s*[=:]\s*['\"]?([a-zA-Z0-9_\-]{20,})['\"]?", 0.85),
