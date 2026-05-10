@@ -132,7 +132,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [1.1.0] - 2026-05-10
 
 ### Added
 
@@ -178,6 +178,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Release Date | Highlights |
 |---------|--------------|------------|
+| 1.1.0 | 2026-05-10 | Agent-memory secret redaction CLI, safe responses, expanded secret recognizers |
 | 1.0.0 | 2026-01-20 | Initial release with 27+ entity types, enterprise features |
 
 ---
