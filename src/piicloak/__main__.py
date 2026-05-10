@@ -21,9 +21,9 @@ def main():
 
         raise SystemExit(redact_main(sys.argv[2:]))
 
-    from .app import main
+    from .app import main as _serve
 
-    main()
+    _serve()
 
 
 if __name__ == '__main__':

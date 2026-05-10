@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections import Counter
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +21,27 @@ from presidio_analyzer import RecognizerResult
 from .recognizers import create_api_key_recognizer
 
 SUPPORTED_PROFILES = ["secrets"]
+MAX_JSON_DEPTH = 100
+
+CONTEXTUAL_SECRET_VALUE_PATTERNS = [
+    re.compile(
+        r"(?i)(?:clickup|click_up)(?:[\s_-]+api)?[\s_-]+(?:key|token)\s*[=:]\s*"
+        r"['\"]?(?P<secret>pk_[a-zA-Z0-9_-]{20,})['\"]?"
+    ),
+    re.compile(
+        r"(?i)(?:cloudflare|cf)(?:[\s_-]+api)?[\s_-]+token\s*[=:]\s*"
+        r"['\"]?(?P<secret>[a-zA-Z0-9_-]{20,})['\"]?"
+    ),
+    re.compile(
+        r"(?i)(?:aws[_-]?secret(?:[_-]?access)?[_-]?key)\s*[=:]\s*"
+        r"['\"]?(?P<secret>[a-zA-Z0-9/+=]{40})['\"]?"
+    ),
+    re.compile(
+        r"(?i)(?:api[_-]?key|secret[_-]?key|access[_-]?token|auth[_-]?token)\s*[=:]\s*"
+        r"['\"]?(?P<secret>[a-zA-Z0-9_\-]{20,})['\"]?"
+    ),
+    re.compile(r"(?i)bearer\s+(?P<secret>[a-zA-Z0-9_\-\.]{20,})"),
+]
 
 
 def placeholder(entity_type: str) -> str:
@@ -36,8 +59,11 @@ def merge_results(results: list[RecognizerResult]) -> list[RecognizerResult]:
     for result in sorted_results:
         if merged and result.start < merged[-1].end:
             previous = merged[-1]
-            if result.end - result.start > previous.end - previous.start:
-                previous.end = max(previous.end, result.end)
+            previous_length = previous.end - previous.start
+            result_length = result.end - result.start
+            if result.end > previous.end:
+                previous.end = result.end
+            if result_length > previous_length:
                 previous.entity_type = result.entity_type
                 previous.score = result.score
             continue
@@ -45,10 +71,32 @@ def merge_results(results: list[RecognizerResult]) -> list[RecognizerResult]:
     return merged
 
 
+@lru_cache(maxsize=1)
+def get_secrets_recognizer():
+    """Return the cached pattern recognizer used by the secrets profile."""
+    return create_api_key_recognizer()
+
+
 def analyze_secrets(text: str) -> list[RecognizerResult]:
     """Analyze text for technical secret-shaped values."""
-    recognizer = create_api_key_recognizer()
-    return merge_results(recognizer.analyze(text, ["API_KEY"]))
+    recognizer = get_secrets_recognizer()
+    results = recognizer.analyze(text, ["API_KEY"])
+    return merge_results(adjust_contextual_secret_spans(text, results))
+
+
+def adjust_contextual_secret_spans(
+    text: str, results: list[RecognizerResult]
+) -> list[RecognizerResult]:
+    """Keep useful labels while redacting only contextual secret values."""
+    for result in results:
+        matched_text = text[result.start : result.end]
+        for pattern in CONTEXTUAL_SECRET_VALUE_PATTERNS:
+            match = pattern.fullmatch(matched_text)
+            if match:
+                result.start += match.start("secret")
+                result.end = result.start + len(match.group("secret"))
+                break
+    return results
 
 
 def redact_text(text: str, counts: Counter[str]) -> str:
@@ -68,14 +116,16 @@ def redact_text(text: str, counts: Counter[str]) -> str:
     return "".join(pieces)
 
 
-def redact_value(value: Any, counts: Counter[str]) -> Any:
+def redact_value(value: Any, counts: Counter[str], depth: int = 0) -> Any:
     """Redact strings recursively while preserving JSON structure."""
+    if depth > MAX_JSON_DEPTH:
+        raise ValueError("JSON nesting is too deep to redact safely")
     if isinstance(value, str):
         return redact_text(value, counts)
     if isinstance(value, list):
-        return [redact_value(item, counts) for item in value]
+        return [redact_value(item, counts, depth + 1) for item in value]
     if isinstance(value, dict):
-        return {key: redact_value(item, counts) for key, item in value.items()}
+        return {key: redact_value(item, counts, depth + 1) for key, item in value.items()}
     return value
 
 
@@ -125,8 +175,8 @@ def build_summary(
         "ok": True,
         "profile": "secrets",
         "dry_run": dry_run,
-        "input": str(input_path),
-        "output": None if dry_run else output,
+        "input": input_path.name,
+        "output": None if dry_run else ("-" if output == "-" else Path(output).name),
         "redactions": dict(counts),
         "total_redactions": sum(counts.values()),
     }

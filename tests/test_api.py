@@ -195,9 +195,12 @@ class TestSafeResponseHelpers:
         """Test common boolean inputs."""
         assert parse_bool(True) is True
         assert parse_bool("true") is True
+        assert parse_bool("  true\n") is True
         assert parse_bool("1") is True
+        assert parse_bool(1) is True
         assert parse_bool(False) is False
         assert parse_bool("false") is False
+        assert parse_bool(0) is False
 
     def test_format_entities_found_omits_text_when_safe(self):
         """Test safe responses omit raw matched entity text."""

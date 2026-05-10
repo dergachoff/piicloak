@@ -1,5 +1,7 @@
 """Tests for the file redaction CLI."""
 
+import contextlib
+import io
 import json
 import subprocess
 import sys
@@ -7,20 +9,28 @@ from collections import Counter
 
 import pytest
 
-import piicloak.__main__ as cli
-import piicloak.redaction
-from piicloak.redaction import build_summary, redact_file, redact_main, redact_text
-
 
 def run_cli(*args):
     """Run the PIICloak module CLI."""
-    return subprocess.run(
+    from piicloak.redaction import redact_main
+
+    argv = list(args)
+    if argv and argv[0] == "redact":
+        argv = argv[1:]
+
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+        return_code = redact_main(argv)
+
+    result = subprocess.CompletedProcess(
         [sys.executable, "-m", "piicloak", *args],
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=True,
+        return_code,
+        stdout.getvalue(),
+        stderr.getvalue(),
     )
+    result.check_returncode()
+    return result
 
 
 def token(*parts):
@@ -170,6 +180,8 @@ def test_redact_dry_run_does_not_write_output(tmp_path):
 
 def test_redaction_helpers_count_without_raw_secret_values(tmp_path):
     """Test redaction helpers return safe counts and no raw matched values."""
+    from piicloak.redaction import build_summary, redact_file
+
     source = tmp_path / "notes.md"
     huggingface_token = token("hf", "_abcdefghijklmnopqrstuvwxyz1234567890")
     source.write_text(
@@ -182,6 +194,7 @@ def test_redaction_helpers_count_without_raw_secret_values(tmp_path):
 
     assert counts == {"API_KEY": 1}
     assert summary["redactions"] == {"API_KEY": 1}
+    assert summary["input"] == "notes.md"
     assert "hf_" not in redacted
     assert "1eeb16dd" in redacted
     assert "abcdefghijklmnopqrstuvwxyz" not in json.dumps(summary)
@@ -189,6 +202,8 @@ def test_redaction_helpers_count_without_raw_secret_values(tmp_path):
 
 def test_redact_text_keeps_plain_text_without_secrets():
     """Test text without secrets is unchanged."""
+    from piicloak.redaction import redact_text
+
     text = "Keep PR #2, commit 1eeb16dd, and domain example.com."
     counts = Counter()
 
@@ -198,8 +213,67 @@ def test_redact_text_keeps_plain_text_without_secrets():
     assert counts == {}
 
 
+def test_contextual_secret_redaction_preserves_labels():
+    """Test labeled patterns keep useful context while redacting only values."""
+    from piicloak.redaction import redact_text
+
+    clickup_token = token("pk_", "abcdefghijklmnopqrstuvwxyz123456")
+    cloudflare_token = token("abcdefghijklmnopqrstuvwxyz", "123456")
+    text = f"ClickUp token: {clickup_token}\nCloudflare token={cloudflare_token}"
+    counts = Counter()
+
+    redacted = redact_text(text, counts)
+
+    assert redacted == "ClickUp token: <API_KEY>\nCloudflare token=<API_KEY>"
+    assert counts == {"API_KEY": 2}
+
+
+def test_redact_value_rejects_excessive_json_depth():
+    """Test deeply nested JSON fails clearly instead of hitting recursion limits."""
+    from piicloak.redaction import MAX_JSON_DEPTH, redact_value
+
+    value = "leaf"
+    for _ in range(MAX_JSON_DEPTH + 1):
+        value = [value]
+
+    with pytest.raises(ValueError, match="too deep"):
+        redact_value(value, Counter())
+
+
+def test_merge_results_unions_overlapping_spans():
+    """Test overlapping spans are fully redacted even when the later span is shorter."""
+    from presidio_analyzer import RecognizerResult
+
+    import piicloak.redaction
+
+    results = [
+        RecognizerResult(entity_type="API_KEY", start=0, end=50, score=0.85),
+        RecognizerResult(entity_type="API_KEY", start=40, end=65, score=0.8),
+    ]
+
+    merged = piicloak.redaction.merge_results(results)
+
+    assert [(result.start, result.end) for result in merged] == [(0, 65)]
+
+
+def test_analyze_secrets_reuses_cached_recognizer():
+    """Test the secrets analyzer does not rebuild regex recognizers per call."""
+    import piicloak.redaction
+
+    piicloak.redaction.get_secrets_recognizer.cache_clear()
+
+    piicloak.redaction.analyze_secrets("No secret in this line.")
+    piicloak.redaction.analyze_secrets("Still no secret in this line.")
+
+    cache_info = piicloak.redaction.get_secrets_recognizer.cache_info()
+    assert cache_info.misses == 1
+    assert cache_info.hits == 1
+
+
 def test_redact_main_writes_stdout_and_safe_summary_to_stderr(tmp_path, capsys):
     """Test in-process CLI writes redacted stdout and safe summary stderr."""
+    from piicloak.redaction import redact_main
+
     source = tmp_path / "notes.txt"
     linear_token = token("lin", "_api_abcdefghijklmnopqrstuvwxyz123456")
     source.write_text(
@@ -220,6 +294,9 @@ def test_redact_main_writes_stdout_and_safe_summary_to_stderr(tmp_path, capsys):
 
 def test_module_main_dispatches_redact(monkeypatch):
     """Test console entrypoint dispatches to the redact subcommand."""
+    import piicloak.__main__ as cli
+    import piicloak.redaction
+
     calls = []
     monkeypatch.setattr(sys, "argv", ["piicloak", "redact", "--dry-run"])
     monkeypatch.setattr(

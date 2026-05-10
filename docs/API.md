@@ -88,6 +88,7 @@ Anonymize PII in .docx documents.
   - `mode`: replace|mask|redact|hash (optional)
   - `language`: Language code (optional)
   - `score_threshold`: Float 0-1 (optional)
+  - `safe_response`: Boolean; omit raw input and raw matched entity text (optional)
 
 **Response:**
 
